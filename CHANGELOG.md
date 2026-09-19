@@ -2,9 +2,11 @@
 
 ## 2.1
 
-- **修：删除按钮是蓝的**。App 顶层有 `.tint(Theme.Blue.base)`，会把所有工具栏按钮染蓝，
-  而 `role: .destructive` 在 `ToolbarItem` 里**覆盖不了 tint**。现在显式用
-  `Theme.destructive` 染红，左滑的删除也一样。
+- **修：删除是蓝的**。App 顶层有 `.tint(Theme.Blue.base)`，会把工具栏和滑动操作的按钮都染蓝，
+  `role: .destructive` 覆盖不了它。现在显式用 `Theme.destructive` 染红：
+  - 工具栏的「删除 n」→ `.tint` + `.foregroundStyle`
+  - 左滑的删除 → 除了给 Button 加 `.tint`，**还要给 `.swipeActions` 修饰符本身加**，
+    因为滑动露出来的那块底色取的是那一层环境里的 tint
 - **对战记录支持批量删除** —— 左上角「选择」进多选模式，每行左边出现系统圆圈；
   选择模式下左上角是「全选 / 取消全选」，右上角是「删除 n」（没选中时是灰的）。
   原来那个单独的「清空」按钮去掉了，全选再删就等于清空。

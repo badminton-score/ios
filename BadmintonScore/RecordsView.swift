@@ -75,9 +75,12 @@ struct RecordsView: View {
                         } label: {
                             Label("删除", systemImage: "trash.fill")
                         }
-                        // 全局 tint 是蓝的，这里显式染红
                         .tint(Theme.destructive)
                     }
+                    // 只给 Button 加 tint 不够 —— 滑动露出来的那块底色
+                    // 取的是 swipeActions 这一层环境里的 tint，
+                    // 而 App 顶层是蓝的，所以必须在这里再设一次。
+                    .tint(Theme.destructive)
             }
         }
         .listStyle(.plain)

@@ -16,6 +16,10 @@ iPhone 应用，纯 SwiftUI。**不联网、不要账号、不收集任何数据
 | :---: | :---: |
 | ![赛点](Screenshots/07-game-point.png) | ![对战记录](Screenshots/08-records.png) |
 
+| 批量选择 | 左滑删除 |
+| :---: | :---: |
+| ![批量选择](Screenshots/09-records-select.png) | ![左滑删除](Screenshots/10-record-swipe.png) |
+
 ## 功能
 
 ### 六种计分模式
