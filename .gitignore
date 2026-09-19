@@ -17,3 +17,7 @@ xcuserdata/
 *.mobileprovision
 *.p12
 ExportOptions.plist
+
+# 视频工程是独立仓库，不嵌进来
+Video/
+发布/
