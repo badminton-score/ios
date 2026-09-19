@@ -91,6 +91,13 @@ final class MatchHistoryStore {
         persist()
     }
 
+    /// 批量删除（选择模式用）。
+    func delete(_ ids: Set<MatchRecord.ID>) {
+        guard !ids.isEmpty else { return }
+        records.removeAll { ids.contains($0.id) }
+        persist()
+    }
+
     func clear() {
         records.removeAll()
         persist()

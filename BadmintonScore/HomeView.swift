@@ -11,6 +11,8 @@ struct AppEntry: View {
     @State private var store: MatchStore
     @State private var history = MatchHistoryStore.shared
     @State private var isShowingMatch = false
+    /// 调试预览：首页一出来就打开对战记录。
+    @State private var startsOnRecords = false
     /// 首次进入首页时若存在未完成的比赛，提供「继续上一场」入口。
     @State private var canResume: Bool
 
@@ -20,6 +22,7 @@ struct AppEntry: View {
         if let preview = DebugPreview.current {
             _store = State(initialValue: preview.store)
             _isShowingMatch = State(initialValue: preview.showsMatch)
+            _startsOnRecords = State(initialValue: preview.showsRecords)
             _canResume = State(initialValue: false)
             return
         }
@@ -40,6 +43,7 @@ struct AppEntry: View {
                 HomeView(
                     store: store,
                     history: history,
+                    startsOnRecords: startsOnRecords,
                     canResume: canResume,
                     onStart: {
                         canResume = false
@@ -60,6 +64,8 @@ struct AppEntry: View {
 struct DebugPreview {
     let store: MatchStore
     let showsMatch: Bool
+    /// 直接打开对战记录页（截图用）。
+    var showsRecords = false
 
     static var current: DebugPreview? {
         let arguments = ProcessInfo.processInfo.arguments
@@ -102,6 +108,35 @@ struct DebugPreview {
             store.startNextGame()
             playGame(store, red: 30, blue: 29)
             return DebugPreview(store: store, showsMatch: true)
+
+        case "records":
+            // 塞几条假记录，方便截图看对战记录页
+            let history = MatchHistoryStore.shared
+            history.clear()
+            let now = Date()
+            let samples: [(String, String, [(Int, Int)], ScoringMode, MatchFormat, TimeInterval)] = [
+                ("林丹", "李宗伟", [(21, 19), (18, 21), (21, 15)], .bwf21, .singles, 1520),
+                ("A1 / A2", "B1 / B2", [(21, 17), (21, 19)], .bwf21, .doubles, 980),
+                ("红方", "蓝方", [(11, 8), (9, 11), (8, 11)], .custom, .singles, 640),
+                ("甲", "乙", [(21, 5)], .single21, .singles, 310),
+            ]
+            for (i, s) in samples.enumerated() {
+                let games = s.2.enumerated().map { GameScore(game: $0.offset + 1, red: $0.element.0, blue: $0.element.1) }
+                let redWins = games.filter { $0.winner == .red }.count
+                let blueWins = games.count - redWins
+                history.add(
+                    MatchRecord(
+                        date: now.addingTimeInterval(-Double(i) * 5400 - 600),
+                        mode: s.3, format: s.4,
+                        redName: s.0, blueName: s.1,
+                        games: games,
+                        winner: redWins > blueWins ? .red : .blue,
+                        duration: s.5
+                    )
+                )
+            }
+            UserDefaults.standard.set(ScoringMode.bwf21.rawValue, forKey: "badminton.selectedMode")
+            return DebugPreview(store: MatchStore(), showsMatch: false, showsRecords: true)
 
         case "custom":
             // 首页停在「自定义」，并预置一套 11 分 / 16 分封顶 / 三局的规则
@@ -162,6 +197,8 @@ struct DebugPreview {
 struct HomeView: View {
     @Bindable var store: MatchStore
     @Bindable var history: MatchHistoryStore
+    /// 调试预览：一出来就打开对战记录页。
+    var startsOnRecords = false
     var canResume: Bool
     var onStart: () -> Void
 
@@ -200,6 +237,7 @@ struct HomeView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.7, dampingFraction: 0.8)) { appeared = true }
+            if startsOnRecords { isShowingRecords = true }
         }
         .sheet(isPresented: $isShowingRecords) {
             RecordsView(history: history)

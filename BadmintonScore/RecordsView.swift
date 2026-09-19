@@ -2,7 +2,7 @@
 //  RecordsView.swift
 //  羽毛球计分器
 //
-//  对战记录列表 + 简单统计。
+//  对战记录：列表 + 统计 + 选择批量删除。
 //
 
 import SwiftUI
@@ -11,7 +11,28 @@ struct RecordsView: View {
     @Bindable var history: MatchHistoryStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var showClearConfirm = false
+    /// 选择模式：打开后每行前面出现圆圈，可以多选。
+    ///
+    /// Debug 构建下可以用 -selectRecords 直接进选择模式，方便截图验证。
+    @State private var isSelecting = {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("-selectRecords")
+        #else
+        return false
+        #endif
+    }()
+    @State private var selection: Set<MatchRecord.ID> = []
+    @State private var editMode: EditMode = {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("-selectRecords") ? .active : .inactive
+        #else
+        return .inactive
+        #endif
+    }()
+
+    private var allSelected: Bool {
+        !history.records.isEmpty && selection.count == history.records.count
+    }
 
     var body: some View {
         NavigationStack {
@@ -21,43 +42,107 @@ struct RecordsView: View {
                 if history.records.isEmpty {
                     empty
                 } else {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 16) {
-                            statsCard
-                            ForEach(history.records) { record in
-                                RecordRow(record: record) {
-                                    withAnimation(.snappy(duration: 0.28)) {
-                                        history.delete(record)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(20)
-                        .padding(.bottom, 30)
-                    }
+                    list
                 }
             }
             .navigationTitle("对战记录")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if !history.records.isEmpty {
-                        Button("清空") { showClearConfirm = true }
-                            .font(Theme.label(15, weight: .semibold))
-                            .foregroundStyle(Color(red: 1.0, green: 0.42, blue: 0.42))
+            .environment(\.editMode, $editMode)
+            .toolbar { toolbar }
+        }
+    }
+
+    // MARK: - 列表
+
+    private var list: some View {
+        List(selection: $selection) {
+            // 统计卡片当第一行放进来，这样 List 的圆角和滑动手势都能正常用
+            statsCard
+                .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 4, trailing: 20))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+            ForEach(history.records) { record in
+                RecordRow(record: record)
+                    .listRowInsets(EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    // 向左滑，右侧露出红色的删除
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            withAnimation(.snappy(duration: 0.28)) { history.delete(record) }
+                        } label: {
+                            Label("删除", systemImage: "trash.fill")
+                        }
+                    }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .animation(.snappy(duration: 0.3), value: history.records)
+    }
+
+    // MARK: - 工具栏
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        if isSelecting {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(allSelected ? "取消全选" : "全选") {
+                    Haptics.selection()
+                    withAnimation(.snappy(duration: 0.25)) {
+                        selection = allSelected ? [] : Set(history.records.map(\.id))
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { dismiss() }
-                        .font(Theme.label(16, weight: .semibold))
+                .font(Theme.label(15, weight: .semibold))
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(role: .destructive) {
+                    deleteSelected()
+                } label: {
+                    Text(selection.isEmpty ? "删除" : "删除 \(selection.count)")
+                        .font(Theme.label(15, weight: .bold))
+                }
+                .disabled(selection.isEmpty)
+            }
+        } else {
+            ToolbarItem(placement: .topBarLeading) {
+                if !history.records.isEmpty {
+                    Button("选择") {
+                        Haptics.selection()
+                        withAnimation(.snappy(duration: 0.28)) {
+                            isSelecting = true
+                            editMode = .active
+                        }
+                    }
+                    .font(Theme.label(15, weight: .semibold))
                 }
             }
-            .confirmationDialog("清空全部对战记录？", isPresented: $showClearConfirm, titleVisibility: .visible) {
-                Button("清空", role: .destructive) {
-                    withAnimation(.snappy(duration: 0.3)) { history.clear() }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("完成") {
+                    if isSelecting { exitSelecting() } else { dismiss() }
                 }
-                Button("取消", role: .cancel) {}
+                .font(Theme.label(16, weight: .semibold))
             }
+        }
+    }
+
+    private func deleteSelected() {
+        let ids = selection
+        Haptics.win()
+        withAnimation(.snappy(duration: 0.3)) {
+            history.delete(ids)
+            selection = []
+        }
+        // 删完就退回普通模式
+        exitSelecting()
+    }
+
+    private func exitSelecting() {
+        withAnimation(.snappy(duration: 0.28)) {
+            isSelecting = false
+            selection = []
+            editMode = .inactive
         }
     }
 
@@ -124,7 +209,6 @@ struct RecordsView: View {
 
 private struct RecordRow: View {
     let record: MatchRecord
-    let onDelete: () -> Void
 
     private static let formatter: DateFormatter = {
         let f = DateFormatter()
@@ -144,9 +228,7 @@ private struct RecordRow: View {
                     .foregroundStyle(Theme.Blue.bright)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background {
-                        Capsule().fill(Theme.Blue.base.opacity(0.16))
-                    }
+                    .background { Capsule().fill(Theme.Blue.base.opacity(0.16)) }
 
                 if record.format == .doubles {
                     Text("双打")
@@ -154,9 +236,7 @@ private struct RecordRow: View {
                         .foregroundStyle(.white.opacity(0.55))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background {
-                            Capsule().fill(Color.white.opacity(0.08))
-                        }
+                        .background { Capsule().fill(Color.white.opacity(0.08)) }
                 }
 
                 Spacer(minLength: 0)
@@ -200,11 +280,6 @@ private struct RecordRow: View {
                         )
                 }
         }
-        .contextMenu {
-            Button(role: .destructive, action: onDelete) {
-                Label("删除这条", systemImage: "trash")
-            }
-        }
     }
 
     private func side(_ name: String, score: String, isWinner: Bool, tint: Color) -> some View {
@@ -213,7 +288,6 @@ private struct RecordRow: View {
                 Image(systemName: "crown.fill")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(tint)
-                    .transition(.scale)
             }
             Text(name)
                 .font(Theme.label(14, weight: isWinner ? .bold : .medium))
