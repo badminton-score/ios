@@ -57,6 +57,9 @@ struct MatchRecord: Codable, Identifiable, Equatable, Sendable {
 @Observable
 final class MatchHistoryStore {
 
+    /// 全局共享的那个。App 里用它，测试里可以自己 new 一个。
+    static let shared = MatchHistoryStore()
+
     private static let storageKey = "badminton.history.v1"
     private static let limit = 200
 

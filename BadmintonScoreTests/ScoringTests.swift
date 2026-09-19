@@ -638,3 +638,145 @@ struct FormatTests {
         #expect(!state.isServing(.red, index: 0))
     }
 }
+
+// MARK: - 对战记录
+
+@Suite("对战记录")
+@MainActor
+struct MatchHistoryTests {
+
+    /// 每个测试自己 new 一个，测完清干净，别互相干扰。
+    private func freshHistory() -> MatchHistoryStore {
+        let h = MatchHistoryStore()
+        h.clear()
+        return h
+    }
+
+    @Test("打完一整场自动记一条")
+    func recordsOnMatchEnd() {
+        let history = freshHistory()
+        defer { history.clear() }
+
+        let store = MatchStore(state: MatchState(mode: .bwf21, redName: "甲", blueName: "乙"))
+        store.history = history
+
+        // 红方连赢两局
+        for _ in 0..<21 { store.addPoint(to: .red) }
+        store.startNextGame()
+        for _ in 0..<21 { store.addPoint(to: .red) }
+
+        #expect(store.state.isMatchOver)
+        #expect(history.records.count == 1)
+
+        let r = history.records[0]
+        #expect(r.redName == "甲")
+        #expect(r.blueName == "乙")
+        #expect(r.winner == .red)
+        #expect(r.gamesLine == "2-0")
+        #expect(r.scoreLine == "21-0 / 21-0")
+        #expect(r.mode == .bwf21)
+    }
+
+    @Test("同一场不会重复记录")
+    func noDuplicateRecord() {
+        let history = freshHistory()
+        defer { history.clear() }
+
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.history = history
+
+        for _ in 0..<21 { store.addPoint(to: .red) }
+        store.startNextGame()
+        for _ in 0..<21 { store.addPoint(to: .red) }
+
+        // 结束后再点几下，不该再写
+        store.addPoint(to: .blue)
+        store.addPoint(to: .blue)
+
+        #expect(history.records.count == 1)
+    }
+
+    @Test("没打完不记录")
+    func noRecordMidMatch() {
+        let history = freshHistory()
+        defer { history.clear() }
+
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.history = history
+
+        for _ in 0..<21 { store.addPoint(to: .red) }
+        #expect(store.state.gameWinner == .red)
+        #expect(history.records.isEmpty)      // 只赢一局，整场还没结束
+
+        store.startNextGame()
+        store.addPoint(to: .red)
+        #expect(history.records.isEmpty)
+    }
+
+    @Test("再来一场之后可以再记一条")
+    func recordsAfterRematch() {
+        let history = freshHistory()
+        defer { history.clear() }
+
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.history = history
+
+        for _ in 0..<21 { store.addPoint(to: .red) }
+        store.startNextGame()
+        for _ in 0..<21 { store.addPoint(to: .red) }
+        #expect(history.records.count == 1)
+
+        store.rematch()
+        for _ in 0..<21 { store.addPoint(to: .blue) }
+        store.startNextGame()
+        for _ in 0..<21 { store.addPoint(to: .blue) }
+
+        #expect(history.records.count == 2)
+        #expect(history.records[0].winner == .blue)   // 新的排前面
+        #expect(history.blueWins == 1)
+        #expect(history.redWins == 1)
+    }
+
+    @Test("自定义赛制下也能记，并记下赛制与双打")
+    func recordsCustomAndDoubles() {
+        let history = freshHistory()
+        defer { history.clear() }
+
+        var state = MatchState(mode: .custom,
+                               customRules: .custom(points: 5, capBonus: nil, maxGames: 1))
+        state.format = .doubles
+        state.setPlayers(["A1", "A2"], for: .red)
+        state.setPlayers(["B1", "B2"], for: .blue)
+
+        let store = MatchStore(state: state)
+        store.history = history
+
+        for _ in 0..<5 { store.addPoint(to: .red) }
+
+        #expect(store.state.isMatchOver)          // 一局定胜负，5 分就结束
+        #expect(history.records.count == 1)
+        let r = history.records[0]
+        #expect(r.mode == .custom)
+        #expect(r.format == .doubles)
+        #expect(r.redName == "A1 / A2")
+    }
+
+    @Test("统计数字对得上")
+    func stats() {
+        let history = freshHistory()
+        defer { history.clear() }
+
+        for (red, blue) in [(21, 5), (5, 21), (21, 19)] {
+            let store = MatchStore(state: MatchState(mode: .single21))
+            store.history = history
+            for _ in 0..<max(red, blue) {
+                if store.state.redPoints < red { store.addPoint(to: .red) }
+                if store.state.bluePoints < blue { store.addPoint(to: .blue) }
+            }
+        }
+
+        #expect(history.total == 3)
+        #expect(history.redWins == 2)
+        #expect(history.blueWins == 1)
+    }
+}

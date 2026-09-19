@@ -9,7 +9,7 @@ import SwiftUI
 
 struct AppEntry: View {
     @State private var store: MatchStore
-    @State private var history = MatchHistoryStore()
+    @State private var history = MatchHistoryStore.shared
     @State private var isShowingMatch = false
     /// 首次进入首页时若存在未完成的比赛，提供「继续上一场」入口。
     @State private var canResume: Bool

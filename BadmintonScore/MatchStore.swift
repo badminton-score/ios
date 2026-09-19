@@ -47,8 +47,13 @@ final class MatchStore {
 
     /// 这一场从什么时候开始的，用来算用时。
     private var startedAt: Date = Date()
-    /// 打完的比赛往这儿写。由 `AppEntry` 在创建时注入。
-    weak var history: MatchHistoryStore?
+    /// 打完的比赛往这儿写。
+    ///
+    /// **默认就是共享实例**，所以不需要谁记得去注入。
+    /// （之前写成 `weak var` 由 AppEntry 注入，结果 .task 那行没写进去，
+    /// 历史记录一条都存不下来。结构上别给漏掉的机会。）
+    /// 测试里可以换成自己的实例。
+    var history: MatchHistoryStore = .shared
     /// 本场是否已经记过一笔，避免同一场重复记录。
     private var didRecord = false
 
@@ -163,7 +168,7 @@ final class MatchStore {
     private func recordIfNeeded() {
         guard !didRecord, state.isMatchOver, let winner = state.matchWinner else { return }
         didRecord = true
-        history?.add(
+        history.add(
             MatchRecord(
                 mode: state.mode,
                 format: state.format,
