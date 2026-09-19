@@ -96,6 +96,8 @@ struct CourtGlow: View {
 struct ServeIndicator: View {
     var side: Side
     var box: String
+    /// 双打时谁在发球；单打传 nil，徽章只显示发球区。
+    var servingName: String?
 
     @State private var float = false
 
@@ -106,7 +108,7 @@ struct ServeIndicator: View {
                 .offset(y: float ? -2.5 : 1.5)
                 .animation(.easeInOut(duration: 1.05).repeatForever(autoreverses: true), value: float)
 
-            Text("发球 · \(box)")
+            Text(servingName.map { "\($0) 发球 · \(box)" } ?? "发球 · \(box)")
                 .font(Theme.label(12, weight: .bold))
                 .contentTransition(.opacity)
         }

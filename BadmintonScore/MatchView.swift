@@ -31,7 +31,10 @@ struct MatchView: View {
                 topBar
                 ScorePanel(
                     side: .red,
-                    name: state.redName,
+                    name: state.name(of: .red),
+                    servingName: state.format == .doubles && state.server == .red
+                        ? state.players(of: .red)[state.serveIndex(of: .red)]
+                        : nil,
                     points: state.redPoints,
                     games: state.redGames,
                     isServing: state.server == .red,
@@ -48,7 +51,10 @@ struct MatchView: View {
                 )
                 ScorePanel(
                     side: .blue,
-                    name: state.blueName,
+                    name: state.name(of: .blue),
+                    servingName: state.format == .doubles && state.server == .blue
+                        ? state.players(of: .blue)[state.serveIndex(of: .blue)]
+                        : nil,
                     points: state.bluePoints,
                     games: state.blueGames,
                     isServing: state.server == .blue,
@@ -261,6 +267,8 @@ struct MatchView: View {
 struct ScorePanel: View {
     var side: Side
     var name: String
+    /// 双打时这一方具体谁在发球；单打传 nil。
+    var servingName: String?
     var points: Int
     var games: Int
     var isServing: Bool
@@ -378,7 +386,7 @@ struct ScorePanel: View {
             Spacer()
 
             if isServing {
-                ServeIndicator(side: side, box: serveBox)
+                ServeIndicator(side: side, box: serveBox, servingName: servingName)
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
         }

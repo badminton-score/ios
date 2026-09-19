@@ -103,6 +103,32 @@ struct DebugPreview {
             playGame(store, red: 30, blue: 29)
             return DebugPreview(store: store, showsMatch: true)
 
+        case "custom":
+            // 首页停在「自定义」，并预置一套 11 分 / 16 分封顶 / 三局的规则
+            UserDefaults.standard.set(ScoringMode.custom.rawValue, forKey: "badminton.selectedMode")
+            let customRules = BadmintonRules.custom(points: 11, capBonus: 5, maxGames: 3)
+            return DebugPreview(
+                store: MatchStore(state: MatchState(mode: .custom, customRules: customRules)),
+                showsMatch: false
+            )
+
+        case "customMatch":
+            // 自定义赛制打到 10:8 —— 再得一分到 11 分就该结束这一局
+            let customRules = BadmintonRules.custom(points: 11, capBonus: 5, maxGames: 3)
+            var state = MatchState(mode: .custom, redName: "红方", blueName: "蓝方", customRules: customRules)
+            state = play(state, red: 10, blue: 8, server: .red)
+            return DebugPreview(store: MatchStore(state: state), showsMatch: true)
+
+        case "doubles":
+            // 双打：林丹/谢杏芳 vs 李宗伟/黄妙珠
+            var state = MatchState(mode: .bwf21, redName: "林丹", blueName: "李宗伟")
+            state.format = .doubles
+            state.setPlayers(["林丹", "谢杏芳"], for: .red)
+            state.setPlayers(["李宗伟", "黄妙珠"], for: .blue)
+            state = play(state, red: 17, blue: 15, server: .red)
+            state.redServeIndex = 1          // 轮到谢杏芳发球
+            return DebugPreview(store: MatchStore(state: state), showsMatch: true)
+
         case "legacy15":
             var state = MatchState(mode: .traditional15, redName: "A 队", blueName: "B 队")
             state = play(state, red: 14, blue: 13, server: .blue)

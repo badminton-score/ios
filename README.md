@@ -4,7 +4,13 @@
 
 iPhone 应用，纯 SwiftUI。**不联网、不要账号、不收集任何数据。**
 
-![首页](Screenshots/01-home.png)
+| 首页 | 计分 | 双打 |
+| :---: | :---: | :---: |
+| ![首页](Screenshots/01-home.png) | ![计分](Screenshots/02-match.png) | ![双打](Screenshots/03-doubles.png) |
+
+| 自定义规则 | 自定义赛制对局 | 胜出画面 |
+| :---: | :---: | :---: |
+| ![自定义](Screenshots/04-custom.png) | ![自定义对局](Screenshots/05-custom-match.png) | ![胜出](Screenshots/06-win.png) |
 
 ## 功能
 
