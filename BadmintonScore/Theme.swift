@@ -35,6 +35,13 @@ enum Theme {
         static let panelDeepest = Color(red: 0.016, green: 0.035, blue: 0.086)
     }
 
+    /// 「删除 / 重新开始」这类破坏性操作用的红。
+    ///
+    /// 必须显式指定：AppEntry 上有 `.tint(Theme.Blue.base)`，
+    /// 会把所有工具栏按钮染蓝，而 `role: .destructive` 在 ToolbarItem 里
+    /// **覆盖不了 tint**，只写 role 的话删除按钮还是蓝的。
+    static let destructive = Color(red: 1.00, green: 0.27, blue: 0.23)
+
     static func accent(_ side: Side) -> Color { side == .red ? Red.base : Blue.base }
     static func deep(_ side: Side) -> Color { side == .red ? Red.deep : Blue.deep }
     static func bright(_ side: Side) -> Color { side == .red ? Red.bright : Blue.bright }

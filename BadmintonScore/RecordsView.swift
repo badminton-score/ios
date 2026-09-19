@@ -13,7 +13,8 @@ struct RecordsView: View {
 
     /// 选择模式：打开后每行前面出现圆圈，可以多选。
     ///
-    /// Debug 构建下可以用 -selectRecords 直接进选择模式，方便截图验证。
+    /// Debug 构建下可以用 -selectRecords 直接进选择模式、
+    /// -selectAllRecords 连记录一起选中，方便截图验证。
     @State private var isSelecting = {
         #if DEBUG
         return ProcessInfo.processInfo.arguments.contains("-selectRecords")
@@ -74,11 +75,21 @@ struct RecordsView: View {
                         } label: {
                             Label("删除", systemImage: "trash.fill")
                         }
+                        // 全局 tint 是蓝的，这里显式染红
+                        .tint(Theme.destructive)
                     }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .onAppear {
+            #if DEBUG
+            // 截图验证用：直接全选，看得到删除按钮的红
+            if ProcessInfo.processInfo.arguments.contains("-selectAllRecords") {
+                selection = Set(history.records.map(\.id))
+            }
+            #endif
+        }
         .animation(.snappy(duration: 0.3), value: history.records)
     }
 
@@ -102,7 +113,9 @@ struct RecordsView: View {
                 } label: {
                     Text(selection.isEmpty ? "删除" : "删除 \(selection.count)")
                         .font(Theme.label(15, weight: .bold))
+                        .foregroundStyle(Theme.destructive)
                 }
+                .tint(Theme.destructive)
                 .disabled(selection.isEmpty)
             }
         } else {
