@@ -12,6 +12,10 @@ iPhone 应用，纯 SwiftUI。**不联网、不要账号、不收集任何数据
 | :---: | :---: | :---: |
 | ![自定义](Screenshots/04-custom.png) | ![自定义对局](Screenshots/05-custom-match.png) | ![胜出](Screenshots/06-win.png) |
 
+| 赛点提示 | 对战记录 |
+| :---: | :---: |
+| ![赛点](Screenshots/07-game-point.png) | ![对战记录](Screenshots/08-records.png) |
+
 ## 功能
 
 ### 六种计分模式
@@ -54,7 +58,9 @@ iPhone 应用，纯 SwiftUI。**不联网、不要账号、不收集任何数据
 
 - **到分自动判胜** —— 达到当前规则规定的分数后自动弹出胜出方，不用手动确认
 - **撤销 / 重做** —— 最多回退 200 步，误操作随便退
-- **对战记录** —— 打完一整场自动存一条：比分、用时、胜负，带简单统计
+- **对战记录** —— 打完一整场自动存一条：比分、用时、胜负，带统计
+  - **向左滑**单条记录，右侧露出红色删除
+  - 左上角**「选择」**进多选，**「全选」**一次选中全部，再一起删
 - **逐分记录** —— 一局里每一分都能翻，按局分组
 - **中途退出不怕丢** —— 比分实时存在本地，下次打开可以「继续上一场」
 
@@ -77,7 +83,7 @@ open BadmintonScore.xcodeproj    # 用 Xcode 打开
 
 ### 测试
 
-45 项单元测试，覆盖：
+51 项单元测试，覆盖：
 
 - 单局胜负判定（含 20 平、29 平、封顶）
 - 局点与赛点
@@ -85,6 +91,7 @@ open BadmintonScore.xcodeproj    # 用 Xcode 打开
 - 自定义规则的参数与边界（夹取、无封顶、局数换算）
 - 双打发球轮转
 - 比赛会话、撤销重做、切换赛制、改队名
+- **对战记录**：自动记录、不重复记、没打完不记、再来一场能再记、自定义与双打也记、统计数字
 
 ```bash
 SIM=<模拟器 UDID> ./Tools/verify.sh
@@ -99,7 +106,13 @@ xcrun simctl launch <UDID> com.alex.BadmintonScore -uiPreview match
 ```
 
 可用值：`home` · `match` · `gamePoint` · `deuce` · `gameEnd` · `win` · `deuceWin` ·
-`legacy15` · `custom` · `customMatch` · `doubles`
+`legacy15` · `custom` · `customMatch` · `doubles` · `records`
+
+几个附加开关：
+
+```bash
+-uiPreview records -selectRecords   # 直接进对战记录的选择模式
+```
 
 ## 结构
 
