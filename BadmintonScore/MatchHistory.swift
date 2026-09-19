@@ -24,12 +24,16 @@ struct MatchRecord: Codable, Identifiable, Equatable, Sendable {
     /// 整场用了多久（秒）。
     var duration: TimeInterval
 
+    /// 红方赢了几局。
+    var redGames: Int { games.filter { $0.winner == .red }.count }
+    /// 蓝方赢了几局。
+    var blueGames: Int { games.filter { $0.winner == .blue }.count }
+
+    /// 某方赢的局数，记录列表里各方显示各自的。
+    func games(of side: Side) -> Int { side == .red ? redGames : blueGames }
+
     /// 大比分，例如 "2-1"。
-    var gamesLine: String {
-        let red = games.filter { $0.winner == .red }.count
-        let blue = games.filter { $0.winner == .blue }.count
-        return "\(red)-\(blue)"
-    }
+    var gamesLine: String { "\(redGames)-\(blueGames)" }
 
     /// 各局小分，例如 "21-19 / 18-21 / 21-15"。
     var scoreLine: String {

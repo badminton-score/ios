@@ -652,6 +652,14 @@ struct MatchHistoryTests {
         return h
     }
 
+    /// 交替加分直到指定比分。
+    private func playGame(_ store: MatchStore, red: Int, blue: Int) {
+        for _ in 0..<max(red, blue) {
+            if store.state.redPoints < red { store.addPoint(to: .red) }
+            if store.state.bluePoints < blue { store.addPoint(to: .blue) }
+        }
+    }
+
     @Test("打完一整场自动记一条")
     func recordsOnMatchEnd() {
         let history = freshHistory()
@@ -759,6 +767,28 @@ struct MatchHistoryTests {
         #expect(r.mode == .custom)
         #expect(r.format == .doubles)
         #expect(r.redName == "A1 / A2")
+    }
+
+    @Test("记录里各方显示自己赢的局数，不是同一个大比分")
+    func perSideGameCount() {
+        let history = freshHistory()
+        defer { history.clear() }
+
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.history = history
+
+        // 2-1：红方赢两局、蓝方赢一局
+        playGame(store, red: 21, blue: 19); store.startNextGame()
+        playGame(store, red: 15, blue: 21); store.startNextGame()
+        playGame(store, red: 21, blue: 18)
+
+        #expect(history.records.count == 1)
+        let r = history.records[0]
+        #expect(r.gamesLine == "2-1")
+        #expect(r.games(of: .red) == 2)
+        #expect(r.games(of: .blue) == 1)
+        #expect(r.redGames == 2)
+        #expect(r.blueGames == 1)
     }
 
     @Test("统计数字对得上")

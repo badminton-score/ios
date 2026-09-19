@@ -47,6 +47,14 @@ struct AppEntry: View {
                     canResume: canResume,
                     onStart: {
                         canResume = false
+                        // 「开始比赛」永远从头开始：上一场打完再点一次也得是干净比分。
+                        // 之前这里不重置，加上 changeMode(同模式) 是空操作，
+                        // 导致同一个赛制没法连着用两次。
+                        store.rematch()
+                        withAnimation(.snappy(duration: 0.42)) { isShowingMatch = true }
+                    },
+                    onResume: {
+                        canResume = false
                         withAnimation(.snappy(duration: 0.42)) { isShowingMatch = true }
                     }
                 )
@@ -200,7 +208,10 @@ struct HomeView: View {
     /// 调试预览：一出来就打开对战记录页。
     var startsOnRecords = false
     var canResume: Bool
+    /// 从头开始一场新的（会清掉上一场的比分）。
     var onStart: () -> Void
+    /// 继续上一场，不清比分。
+    var onResume: () -> Void
 
     @AppStorage("badminton.selectedMode") private var selectedModeRaw: String = ScoringMode.bwf21.rawValue
     @State private var appeared = false
@@ -346,7 +357,7 @@ struct HomeView: View {
     private var resumeCard: some View {
         Button {
             Haptics.selection()
-            onStart()
+            onResume()
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: "clock.arrow.circlepath")

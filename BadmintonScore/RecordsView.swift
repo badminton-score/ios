@@ -263,14 +263,15 @@ private struct RecordRow: View {
             }
 
             HStack(alignment: .center, spacing: 10) {
-                side(record.redName, score: record.gamesLine,
+                // 各方显示**自己**赢的局数（之前两边都用了 gamesLine，都显示「2-1」）
+                side(record.redName, score: "\(record.games(of: .red))",
                      isWinner: record.winner == .red, tint: Theme.Red.base)
 
                 Text("vs")
                     .font(Theme.label(11, weight: .bold))
                     .foregroundStyle(.white.opacity(0.3))
 
-                side(record.blueName, score: record.gamesLine,
+                side(record.blueName, score: "\(record.games(of: .blue))",
                      isWinner: record.winner == .blue, tint: Theme.Blue.base)
             }
 
