@@ -1,6 +1,6 @@
 //
 //  BadmintonScoreApp.swift
-//  羽毛球计分器
+//  赛点
 //
 
 import SwiftUI

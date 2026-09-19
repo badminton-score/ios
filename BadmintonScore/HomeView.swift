@@ -1,6 +1,6 @@
 //
 //  HomeView.swift
-//  羽毛球计分器
+//  赛点
 //
 //  首页：选择计分模式、设置首发方，进入比赛。
 //
@@ -341,7 +341,7 @@ struct HomeView: View {
             .frame(height: 130)
 
             VStack(spacing: 6) {
-                Text("羽毛球计分器")
+                Text("赛点")
                     .font(Theme.label(30, weight: .heavy))
                     .foregroundStyle(.white)
                 Text("红蓝对抗 · 规则内置 · 一指计分")
