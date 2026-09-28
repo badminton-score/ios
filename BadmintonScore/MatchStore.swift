@@ -72,6 +72,9 @@ final class MatchStore {
         let store = MatchStore(state: archive.state)
         store.undoStack = archive.undo
         store.redoStack = archive.redo
+        store.startedAt = archive.startedAt ?? Date()
+        store.didRecord = archive.didRecord ?? archive.state.isMatchOver
+        store.settle()
         return store
     }
 
@@ -79,10 +82,18 @@ final class MatchStore {
         var state: MatchState
         var undo: [MatchState]
         var redo: [MatchState]
+        var startedAt: Date?
+        var didRecord: Bool?
     }
 
     private func persist() {
-        let archive = Archive(state: state, undo: undoStack, redo: redoStack)
+        let archive = Archive(
+            state: state,
+            undo: undoStack,
+            redo: redoStack,
+            startedAt: startedAt,
+            didRecord: didRecord
+        )
         guard let data = try? JSONEncoder().encode(archive) else { return }
         UserDefaults.standard.set(data, forKey: Self.storageKey)
     }
@@ -110,8 +121,18 @@ final class MatchStore {
 
     func addPoint(to side: Side) {
         guard !isLocked else { return }
-        pushUndo()
+        let previous = state
         let (next, event) = ScoreEngine.applyPoint(side, to: state)
+        if case .serveChange = event {
+            state = next
+            lastEvent = event
+            lastEventToken = UUID()
+            lastUndoneSide = nil
+            toast = nil
+            persist()
+            return
+        }
+        pushUndo(from: previous)
         state = next
         lastEvent = event
         lastEventToken = UUID()
@@ -162,11 +183,11 @@ final class MatchStore {
     func undo(preferredSide: Side? = nil) {
         guard canUndo, presentation == nil else { return }
         let previous = undoStack.last
-        let side: Side? = preferredSide ?? {
+        let side: Side? = {
             guard let p = previous else { return nil }
             if p.redPoints != state.redPoints { return .red }
             if p.bluePoints != state.bluePoints { return .blue }
-            return nil
+            return preferredSide
         }()
         pushRedo()
         let cards = state.cardEvents
@@ -213,8 +234,8 @@ final class MatchStore {
         )
     }
 
-    private func pushUndo() {
-        undoStack.append(state)
+    private func pushUndo(from snapshot: MatchState? = nil) {
+        undoStack.append(snapshot ?? state)
         if undoStack.count > 200 { undoStack.removeFirst(undoStack.count - 200) }
         redoStack.removeAll()
     }
@@ -236,13 +257,13 @@ final class MatchStore {
     }
 
     /// 整场重来：保持队名与赛制，清零比分。
-    func rematch() {
+    func rematch(firstServer: Side = .red) {
         startedAt = Date()
         didRecord = false
         var fresh = MatchState(mode: state.mode,
                                redName: state.players(of: .red).first,
                                blueName: state.players(of: .blue).first,
-                               firstServer: .red,
+                               firstServer: firstServer,
                                customRules: state.customRules)
         fresh.format = state.format
         fresh.setPlayers(state.players(of: .red), for: .red)
@@ -276,7 +297,7 @@ final class MatchStore {
         var fresh = MatchState(mode: mode,
                                redName: state.players(of: .red).first,
                                blueName: state.players(of: .blue).first,
-                               firstServer: .red,
+                               firstServer: state.server,
                                // 切到自定义时带上之前调好的那套，别每次都重置
                                customRules: state.customRules)
         fresh.format = state.format
@@ -289,6 +310,7 @@ final class MatchStore {
         presentation = nil
         toast = nil
         lastEvent = .none
+        lastUndoneSide = nil
         persist()
     }
 
@@ -316,16 +338,28 @@ final class MatchStore {
             recordIfNeeded()
             return
         }
-        guard let winner = state.gameWinner else {
+
+        let finalizedGame = state.gameScores.last { $0.game == state.currentGame }
+        guard let winner = finalizedGame?.winner ?? state.gameWinner else {
             presentation = nil
             return
+        }
+        if finalizedGame == nil {
+            state.gameScores.append(
+                GameScore(game: state.currentGame, red: state.redPoints, blue: state.bluePoints)
+            )
+            if winner == .red {
+                state.redGames += 1
+            } else {
+                state.blueGames += 1
+            }
         }
         if state.games(of: winner) >= state.rules.gamesToWin {
             state.isMatchOver = true
             state.matchWinner = winner
             presentation = .matchResult(side: winner)
             recordIfNeeded()
-        } else if !state.gameScores.contains(where: { $0.game == state.currentGame }) {
+        } else {
             presentation = .nextGame(side: winner, red: state.redPoints, blue: state.bluePoints, game: state.currentGame)
         }
     }

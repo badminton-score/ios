@@ -68,6 +68,14 @@ struct GameWinnerTests {
         #expect(rules.winner(red: 12, blue: 10) == .red)
         #expect(rules.winner(red: 15, blue: 14) == .red)
     }
+
+    @Test("双方都超过缩小的封顶时，只看领先方且平局不判胜")
+    func customCapTie() {
+        let rules = BadmintonRules.custom(points: 5, capBonus: 1, maxGames: 1)
+        #expect(rules.winner(red: 6, blue: 6) == nil)
+        #expect(rules.winner(red: 7, blue: 6) == .red)
+        #expect(rules.winner(red: 6, blue: 7) == .blue)
+    }
 }
 
 // MARK: - 局点 / 赛点
@@ -121,6 +129,21 @@ struct PointSituationTests {
         #expect(state.isMatchPoint(for: .red) == false)
     }
 
+    @Test("发球得分制只有当前发球方可能是局点")
+    func servicePointOnlyForServer() {
+        var state = MatchState(mode: .traditional15, firstServer: .red)
+        state.redPoints = 14
+        state.bluePoints = 13
+        #expect(state.isGamePoint(for: .red))
+        #expect(state.isGamePoint(for: .blue) == false)
+
+        state.server = .blue
+        state.redPoints = 13
+        state.bluePoints = 14
+        #expect(state.isGamePoint(for: .blue))
+        #expect(state.isGamePoint(for: .red) == false)
+    }
+
     @Test("第一局永远不是赛点")
     func firstGameNeverMatchPoint() {
         var state = MatchState(mode: .bwf21)
@@ -158,20 +181,36 @@ struct ScoringFlowTests {
         #expect(state.serveBox == "右区")
     }
 
-    @Test("旧制发球得分制：接发球方得分不换发球")
+    @Test("旧制发球得分制：接发球方赢球只夺回发球权")
     func servicePointMode() {
         var state = MatchState(mode: .traditional15, firstServer: .red)
         state.redPoints = 3
         state.bluePoints = 3
         let result = ScoreEngine.applyPoint(.blue, to: state)
-        #expect(result.0.bluePoints == 4)
+        #expect(result.0.bluePoints == 3)
         #expect(result.0.redPoints == 3)
-        #expect(result.0.server == .red)
+        #expect(result.0.server == .blue)
+        #expect(result.0.log.isEmpty)
+        #expect(result.1 == .serveChange(side: .blue))
 
         // 发球方得分则继续保持发球权
-        let served = ScoreEngine.applyPoint(.red, to: result.0)
-        #expect(served.0.redPoints == 4)
-        #expect(served.0.server == .red)
+        let served = ScoreEngine.applyPoint(.blue, to: result.0)
+        #expect(served.0.bluePoints == 4)
+        #expect(served.0.server == .blue)
+    }
+
+    @Test("旧制双打接发球方夺回发球权时换人发")
+    func servicePointDoublesRotation() {
+        var state = MatchState(mode: .traditional15)
+        state.format = .doubles
+        state.server = .red
+        state.redServeIndex = 0
+        state.blueServeIndex = 0
+
+        let result = ScoreEngine.applyPoint(.blue, to: state)
+        #expect(result.0.bluePoints == 0)
+        #expect(result.0.server == .blue)
+        #expect(result.0.blueServeIndex == 1)
     }
 
     @Test("拿到 21 分触发本局结束")
@@ -402,6 +441,32 @@ struct MatchStoreTests {
         #expect(store.state.mode == .bwf21)
     }
 
+    @Test("新比赛保留首页选定的先发球方")
+    func rematchKeepsFirstServer() {
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.rematch(firstServer: .blue)
+        #expect(store.state.server == .blue)
+        #expect(store.state.startedByRed == false)
+    }
+
+    @MainActor
+    @Test("切换赛制不会重置首页选定的先发球方")
+    func changeModeKeepsFirstServer() {
+        let store = MatchStore(state: MatchState(mode: .bwf21, firstServer: .blue))
+        store.changeMode(.traditional15)
+        #expect(store.state.server == .blue)
+        #expect(store.state.startedByRed == false)
+    }
+
+    @Test("减分提示以实际被撤销的一分为准")
+    func undoUsesActualSide() {
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.addPoint(to: .red)
+        store.removePoint(from: .blue)
+        #expect(store.state.redPoints == 0)
+        #expect(store.lastUndoneSide == .red)
+    }
+
     @Test("队名为空时回落到默认名")
     func renameFallback() {
         let store = MatchStore(state: MatchState(mode: .bwf21))
@@ -573,6 +638,56 @@ struct CustomRulesTests {
         #expect(state.gameWinner == .red)
         #expect(state.redGames == 1)
         #expect(!state.isMatchOver)          // 三局两胜，才赢一局
+    }
+
+    @Test("自定义规则改小后先结算当前局，再判断整场")
+    @MainActor
+    func customShrinkSettlesCurrentGame() {
+        let original = BadmintonRules.custom(points: 11, capBonus: nil, maxGames: 3)
+        var state = MatchState(mode: .custom, customRules: original)
+        state.redPoints = 11
+        state.bluePoints = 8
+        let store = MatchStore(state: state)
+
+        store.setCustomRules(points: 5, capBonus: nil, maxGames: 3)
+
+        #expect(store.state.gameScores.count == 1)
+        #expect(store.state.gameScores.first?.game == 1)
+        #expect(store.state.gameScores.first?.red == 11)
+        #expect(store.state.gameScores.first?.blue == 8)
+        #expect(store.state.redGames == 1)
+        #expect(store.state.isMatchOver == false)
+        guard case .nextGame(let side, _, _, let game) = store.presentation else {
+            Issue.record("规则改小后应当提示开始下一局")
+            return
+        }
+        #expect(side == .red)
+        #expect(game == 1)
+
+        store.startNextGame()
+        #expect(store.state.currentGame == 2)
+        #expect(store.state.redGames == 1)
+        #expect(store.state.gameScores.count == 1)
+    }
+
+    @Test("自定义规则改小后直接结束整场时不会漏记局分")
+    @MainActor
+    func customShrinkCanFinishMatch() {
+        let original = BadmintonRules.custom(points: 11, capBonus: nil, maxGames: 3)
+        var state = MatchState(mode: .custom, customRules: original)
+        state.redPoints = 11
+        state.bluePoints = 8
+        let store = MatchStore(state: state)
+
+        store.setCustomRules(points: 5, capBonus: nil, maxGames: 1)
+
+        #expect(store.state.gameScores.count == 1)
+        #expect(store.state.gameScores.first?.game == 1)
+        #expect(store.state.gameScores.first?.red == 11)
+        #expect(store.state.gameScores.first?.blue == 8)
+        #expect(store.state.redGames == 1)
+        #expect(store.state.isMatchOver)
+        #expect(store.state.matchWinner == .red)
     }
 
     @Test("自定义 11 分制下 10:10 不结束，12:10 才结束")

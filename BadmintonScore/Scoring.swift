@@ -94,7 +94,7 @@ enum ScoringMode: String, Codable, CaseIterable, Identifiable, Sendable {
         switch self {
         case .bwf21: "正式比赛 · 三局两胜"
         case .classic21: "无封顶 · 必须净胜 2 分"
-        case .traditional15: "旧制 · 两局三胜"
+        case .traditional15: "旧制 · 三局两胜"
         case .traditional11: "旧制 · 三局两胜"
         case .single21: "快速对战 · 一局定胜负"
         case .custom: "自己定分数与局数"
@@ -217,14 +217,13 @@ struct BadmintonRules: Codable, Equatable, Sendable {
     /// 规则要点：只有当双方都进入平分（例如 21 分制的 20 平）之后，
     /// 才要求净胜 2 分；在那之前，先到目标分即获胜（21:15 直接结束）。
     func winner(red: Int, blue: Int) -> Side? {
+        guard red != blue else { return nil }
         let deuce = deuceAt
         let isDeuce = deuce.map { red >= $0 && blue >= $0 } ?? false
-        for side in Side.allCases {
-            let mine = side == .red ? red : blue
-            let theirs = side == .red ? blue : red
-            if mine >= absoluteWin { return side }
-            if mine >= pointsToWin, !isDeuce || mine - theirs >= 2 { return side }
-        }
+        let mine = max(red, blue)
+        let theirs = min(red, blue)
+        if mine >= absoluteWin { return red > blue ? .red : .blue }
+        if mine >= pointsToWin, !isDeuce || mine - theirs >= 2 { return red > blue ? .red : .blue }
         return nil
     }
 }
@@ -390,6 +389,7 @@ struct MatchState: Codable, Equatable, Sendable {
     /// - 只有 20:20 之后，才必须一直净胜 2 分（否则 21:20 那类比分早该结束了）
     func isGamePoint(for side: Side) -> Bool {
         guard gameWinner == nil, !isMatchOver else { return false }
+        guard rules.rallyPoint || server == side else { return false }
         var probe = self
         probe.redPoints += side == .red ? 1 : 0
         probe.bluePoints += side == .blue ? 1 : 0
@@ -399,6 +399,7 @@ struct MatchState: Codable, Equatable, Sendable {
     /// 某方是否处于「只差一球就赢下整场比赛」的状态。
     func isMatchPoint(for side: Side) -> Bool {
         guard gameWinner == nil, !isMatchOver else { return false }
+        guard rules.rallyPoint || server == side else { return false }
         var probe = self
         probe.redPoints += side == .red ? 1 : 0
         probe.bluePoints += side == .blue ? 1 : 0

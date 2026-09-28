@@ -12,6 +12,8 @@ enum ScoreEvent: Equatable, Sendable {
     case none
     /// 普通得分。
     case point(side: Side)
+    /// 发球得分制下，接发球方赢球只夺回发球权，不加分。
+    case serveChange(side: Side)
     /// 本局结束。
     case gameWon(side: Side, red: Int, blue: Int, game: Int)
     /// 整场比赛结束。
@@ -43,6 +45,21 @@ enum ScoreEngine {
         guard !state.isMatchOver, state.gameWinner == nil else { return (state, .none) }
 
         var next = state
+        let wasServing = next.server == side
+
+        // 旧制发球得分制：接发球方赢球只交换发球权，不计分。
+        if !next.rules.rallyPoint, !wasServing {
+            if next.format == .doubles {
+                if side == .red {
+                    next.redServeIndex = 1 - next.redServeIndex
+                } else {
+                    next.blueServeIndex = 1 - next.blueServeIndex
+                }
+            }
+            next.server = side
+            return (next, .serveChange(side: side))
+        }
+
         if side == .red { next.redPoints += 1 } else { next.bluePoints += 1 }
         next.log.append(
             MatchLogEntry(
@@ -54,8 +71,7 @@ enum ScoreEngine {
             )
         )
 
-        // 每球得分制：得分方获得发球权；旧制发球得分制：发球方得分才换发球。
-        let wasServing = next.server == side
+        // 每球得分制：得分方获得发球权；旧制只有发球方会走到这里。
         if next.rules.rallyPoint || wasServing {
             // 双打：接发球方夺回发球权时，换这对里的另一个人发球。
             // （发球方自己连续得分时，还是同一个人发，只是左右发球区轮换。）

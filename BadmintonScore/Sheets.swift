@@ -65,11 +65,11 @@ struct NextGameSheet: View {
 
             HStack(spacing: 8) {
                 Circle().fill(Theme.accent(.red)).frame(width: 8, height: 8)
-                Text("\(state.redName) \(state.redGames)")
+                Text("\(state.name(of: .red)) \(state.redGames)")
                     .font(Theme.label(14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.8))
                 Text("·").foregroundStyle(.white.opacity(0.3))
-                Text("\(state.blueGames) \(state.blueName)")
+                Text("\(state.blueGames) \(state.name(of: .blue))")
                     .font(Theme.label(14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.8))
                 Circle().fill(Theme.accent(.blue)).frame(width: 8, height: 8)
@@ -288,6 +288,7 @@ struct SettingsSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var showResetConfirm = false
+    @AppStorage("badminton.selectedMode") private var selectedModeRaw = ScoringMode.bwf21.rawValue
 
     private var state: MatchState { store.state }
 
@@ -296,6 +297,8 @@ struct SettingsSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     modeSection
+                    formatSection
+                    playersSection
                     rulesSection
                     serverSection
                     dangerSection
@@ -358,6 +361,7 @@ struct SettingsSheet: View {
             guard mode != state.mode else { return }
             Haptics.selection()
             withAnimation(.snappy(duration: 0.3)) {
+                selectedModeRaw = mode.rawValue
                 store.changeMode(mode)
             }
         } label: {
@@ -400,7 +404,7 @@ struct SettingsSheet: View {
     }
 
     private var rulesSection: some View {
-        let rules = state.mode.rules
+        let rules = state.rules
         return VStack(alignment: .leading, spacing: 12) {
             sectionTitle("规则说明")
             VStack(alignment: .leading, spacing: 10) {

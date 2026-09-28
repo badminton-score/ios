@@ -13,9 +13,6 @@ struct AppEntry: View {
     @State private var isShowingMatch = false
     /// 调试预览：首页一出来就打开对战记录。
     @State private var startsOnRecords = false
-    /// 首次进入首页时若存在未完成的比赛，提供「继续上一场」入口。
-    @State private var canResume: Bool
-
     init() {
         #if DEBUG
         // 截图与联调用：-uiPreview <home|match|gamePoint|gameEnd|win> 直接进入指定画面。
@@ -23,13 +20,11 @@ struct AppEntry: View {
             _store = State(initialValue: preview.store)
             _isShowingMatch = State(initialValue: preview.showsMatch)
             _startsOnRecords = State(initialValue: preview.showsRecords)
-            _canResume = State(initialValue: false)
             return
         }
         #endif
         let restored = MatchStore.restoring()
         _store = State(initialValue: restored ?? MatchStore())
-        _canResume = State(initialValue: restored != nil)
     }
 
     var body: some View {
@@ -44,17 +39,10 @@ struct AppEntry: View {
                     store: store,
                     history: history,
                     startsOnRecords: startsOnRecords,
-                    canResume: canResume,
                     onStart: {
-                        canResume = false
-                        // 「开始比赛」永远从头开始：上一场打完再点一次也得是干净比分。
-                        // 之前这里不重置，加上 changeMode(同模式) 是空操作，
-                        // 导致同一个赛制没法连着用两次。
-                        store.rematch()
                         withAnimation(.snappy(duration: 0.42)) { isShowingMatch = true }
                     },
                     onResume: {
-                        canResume = false
                         withAnimation(.snappy(duration: 0.42)) { isShowingMatch = true }
                     }
                 )
@@ -235,7 +223,6 @@ struct HomeView: View {
     @Bindable var history: MatchHistoryStore
     /// 调试预览：一出来就打开对战记录页。
     var startsOnRecords = false
-    var canResume: Bool
     /// 从头开始一场新的（会清掉上一场的比分）。
     var onStart: () -> Void
     /// 继续上一场，不清比分。
@@ -251,7 +238,11 @@ struct HomeView: View {
     }
 
     private var hasProgress: Bool {
-        store.state.redPoints > 0 || store.state.bluePoints > 0 || !store.state.gameScores.isEmpty
+        !store.state.isMatchOver
+            && (store.state.redPoints > 0
+                || store.state.bluePoints > 0
+                || !store.state.gameScores.isEmpty
+                || !store.state.cards.isEmpty)
     }
 
     var body: some View {
@@ -262,7 +253,7 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
                     hero
-                    if canResume && hasProgress { resumeCard }
+                    if hasProgress { resumeCard }
                     modeSection
                     firstServerSection
                     startButton
@@ -372,7 +363,7 @@ struct HomeView: View {
                 Text("赛点")
                     .font(Theme.label(30, weight: .heavy))
                     .foregroundStyle(.white)
-                Text("红蓝对抗 · 规则内置 · 一指计分")
+                Text("红蓝对抗 · 红黄牌 · 一指计分")
                     .font(Theme.label(13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.5))
             }
@@ -511,7 +502,9 @@ struct HomeView: View {
     private var startButton: some View {
         Button {
             Haptics.critical()
+            let firstServer = store.state.server
             store.changeMode(mode)
+            store.rematch(firstServer: firstServer)
             onStart()
         } label: {
             HStack(spacing: 8) {

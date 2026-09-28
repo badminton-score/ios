@@ -50,6 +50,7 @@ struct MatchView: View {
                 ScorePanel(
                     side: .red,
                     name: state.name(of: .red),
+                    canEditName: state.format == .singles,
                     servingName: state.format == .doubles && state.server == .red
                         ? state.players(of: .red)[state.serveIndex(of: .red)]
                         : nil,
@@ -59,6 +60,7 @@ struct MatchView: View {
                     serveBox: state.serveBox,
                     isMatchPoint: store.isMatchPoint(.red),
                     isGamePoint: store.isGamePoint(.red),
+                    rallyPoint: state.rules.rallyPoint,
                     redCardCount: state.cardCount(of: .red, for: .red),
                     yellowCardCount: state.cardCount(of: .yellow, for: .red),
                     isLocked: store.isLocked,
@@ -73,6 +75,7 @@ struct MatchView: View {
                 ScorePanel(
                     side: .blue,
                     name: state.name(of: .blue),
+                    canEditName: state.format == .singles,
                     servingName: state.format == .doubles && state.server == .blue
                         ? state.players(of: .blue)[state.serveIndex(of: .blue)]
                         : nil,
@@ -82,6 +85,7 @@ struct MatchView: View {
                     serveBox: state.serveBox,
                     isMatchPoint: store.isMatchPoint(.blue),
                     isGamePoint: store.isGamePoint(.blue),
+                    rallyPoint: state.rules.rallyPoint,
                     redCardCount: state.cardCount(of: .red, for: .blue),
                     yellowCardCount: state.cardCount(of: .yellow, for: .blue),
                     isLocked: store.isLocked,
@@ -99,6 +103,32 @@ struct MatchView: View {
             .padding(.bottom, 10)
 
             toastLayer
+
+            if state.gameWinner != nil, !state.isMatchOver, store.presentation == nil {
+                VStack {
+                    Spacer()
+                    Button {
+                        store.startNextGame()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.fill")
+                            Text("开始第 \(state.currentGame + 1) 局")
+                        }
+                        .font(Theme.label(16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 22)
+                        .frame(height: 52)
+                        .background {
+                            Capsule(style: .continuous)
+                                .fill(Theme.accentGradient(.blue))
+                                .shadow(color: Theme.glow(.blue).opacity(0.45), radius: 18, y: 7)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 20)
+                }
+                .zIndex(15)
+            }
 
             if let cardSignal {
                 CardSignalOverlay(
@@ -222,7 +252,8 @@ struct MatchView: View {
             UndoMenu(
                 store: store,
                 onUndoScore: undo,
-                onUndoCard: undoCard
+                onUndoCard: undoCard,
+                onRedoScore: redo
             )
             GlassButton(systemName: "list.bullet", size: 38) { store.isShowingHistory = true }
             GlassButton(systemName: "slider.horizontal.3", size: 38) { store.isShowingSettings = true }
@@ -280,9 +311,8 @@ struct MatchView: View {
     private func undo() {
         guard store.canUndo, !store.isLocked else { return }
         Haptics.correction()
-        let side = store.lastUndoneSide
         store.undo()
-        if let side { shake(side) }
+        if let side = store.lastUndoneSide { shake(side) }
     }
 
     /// 减分：撤销最近一次计分，并给出纠正反馈。
@@ -290,7 +320,7 @@ struct MatchView: View {
         guard store.canUndo, !store.isLocked else { return }
         Haptics.correction()
         store.removePoint(from: side)
-        shake(side)
+        if let actualSide = store.lastUndoneSide { shake(actualSide) }
     }
 
     private func undoCard(_ type: CardType) {
@@ -298,6 +328,12 @@ struct MatchView: View {
         Haptics.correction()
         store.undoCard(type)
         if let side = store.lastUndoneSide { shake(side) }
+    }
+
+    private func redo() {
+        guard store.canRedo, !store.isLocked else { return }
+        Haptics.correction()
+        store.redo()
     }
 
     private func pulse(_ side: Side) {
@@ -327,6 +363,7 @@ struct MatchView: View {
 struct ScorePanel: View {
     var side: Side
     var name: String
+    var canEditName: Bool
     /// 双打时这一方具体谁在发球；单打传 nil。
     var servingName: String?
     var points: Int
@@ -335,6 +372,7 @@ struct ScorePanel: View {
     var serveBox: String
     var isMatchPoint: Bool
     var isGamePoint: Bool
+    var rallyPoint: Bool
     var redCardCount: Int
     var yellowCardCount: Int
     var isLocked: Bool
@@ -395,7 +433,7 @@ struct ScorePanel: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(name) \(points) 分")
-        .accessibilityHint("轻点加一分")
+        .accessibilityHint(rallyPoint ? "轻点加一分" : "轻点记录这一球，只有发球方会得分")
         .accessibilityAddTraits(.isButton)
         .onAppear { editingName = name }
         .onChange(of: name) { _, newValue in
@@ -419,17 +457,25 @@ struct ScorePanel: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 7) {
-                TextField("", text: $editingName)
-                    .textFieldStyle(.plain)
-                    .font(Theme.label(19, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .focused($nameFocused)
-                    .submitLabel(.done)
-                    .onSubmit(commitName)
-                    .onChange(of: nameFocused) { _, focused in
-                        if !focused { commitName() }
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
+                if canEditName {
+                    TextField("", text: $editingName)
+                        .textFieldStyle(.plain)
+                        .font(Theme.label(19, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .focused($nameFocused)
+                        .submitLabel(.done)
+                        .onSubmit(commitName)
+                        .onChange(of: nameFocused) { _, focused in
+                            if !focused { commitName() }
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                } else {
+                    Text(name)
+                        .font(Theme.label(19, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                }
 
                 HStack(spacing: 6) {
                     Text("已胜 \(games) 局")
@@ -471,7 +517,7 @@ struct ScorePanel: View {
     private var footer: some View {
         HStack(alignment: .bottom) {
             Label {
-                Text("轻点面板 · 加一分")
+                Text(rallyPoint ? "轻点面板 · 加一分" : "轻点面板 · 得分 / 夺发球权")
             } icon: {
                 Image(systemName: "hand.tap.fill")
             }
@@ -521,9 +567,10 @@ private struct UndoMenu: View {
     @Bindable var store: MatchStore
     var onUndoScore: () -> Void
     var onUndoCard: (CardType) -> Void
+    var onRedoScore: () -> Void
 
     private var isEnabled: Bool {
-        (store.canUndo || store.canUndoCard(.red) || store.canUndoCard(.yellow)) && !store.isLocked
+        (store.canUndo || store.canRedo || store.canUndoCard(.red) || store.canUndoCard(.yellow)) && !store.isLocked
     }
 
     var body: some View {
@@ -546,6 +593,13 @@ private struct UndoMenu: View {
                 Label("撤销黄牌", systemImage: "rectangle.portrait.fill")
             }
             .disabled(!store.canUndoCard(.yellow))
+
+            Divider()
+
+            Button(action: onRedoScore) {
+                Label("恢复分数", systemImage: "arrow.uturn.forward")
+            }
+            .disabled(!store.canRedo || store.isLocked)
         } label: {
             Image(systemName: "arrow.uturn.backward")
                 .font(.system(size: 16, weight: .semibold))
