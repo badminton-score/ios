@@ -41,6 +41,8 @@ enum Theme {
     /// 会把所有工具栏按钮染蓝，而 `role: .destructive` 在 ToolbarItem 里
     /// **覆盖不了 tint**，只写 role 的话删除按钮还是蓝的。
     static let destructive = Color(red: 1.00, green: 0.27, blue: 0.23)
+    static let yellowCard = Color(red: 1.00, green: 0.82, blue: 0.16)
+    static let redCard = Color(red: 1.00, green: 0.20, blue: 0.22)
 
     static func accent(_ side: Side) -> Color { side == .red ? Red.base : Blue.base }
     static func deep(_ side: Side) -> Color { side == .red ? Red.deep : Blue.deep }
@@ -48,6 +50,7 @@ enum Theme {
     static func glow(_ side: Side) -> Color { side == .red ? Red.glow : Blue.glow }
     static func panelDark(_ side: Side) -> Color { side == .red ? Red.panelDark : Blue.panelDark }
     static func panelDeepest(_ side: Side) -> Color { side == .red ? Red.panelDeepest : Blue.panelDeepest }
+    static func card(_ type: CardType) -> Color { type == .yellow ? yellowCard : redCard }
 
     static func panelGradient(_ side: Side) -> LinearGradient {
         LinearGradient(

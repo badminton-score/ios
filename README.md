@@ -20,6 +20,10 @@ iPhone 应用，纯 SwiftUI。**不联网、不要账号、不收集任何数据
 | :---: | :---: |
 | ![批量选择](Screenshots/09-records-select.png) | ![左滑删除](Screenshots/10-record-swipe.png) |
 
+| 红黄牌计数 | 红牌 | 黄牌 |
+| :---: | :---: | :---: |
+| ![红黄牌计数](Screenshots/11-cards.png) | ![红牌](Screenshots/12-card-red.png) | ![黄牌](Screenshots/13-card-yellow.png) |
+
 ## 功能
 
 ### 六种计分模式
@@ -55,6 +59,7 @@ iPhone 应用，纯 SwiftUI。**不联网、不要账号、不收集任何数据
 
 - **点面板任意位置加分** —— 整块面板都是按钮，不用瞄准小图标
 - **点右下角的减号减分** —— 减分就是**撤回上一次加分**，加错了立刻能改
+- **红黄牌** —— 双方分别计数；点红牌或黄牌会全屏提示，撤销菜单可选择撤回分数、红牌或黄牌
 
 界面上会提示当前状态：`局点`、`赛点`、`发球 · 左区 / 右区`。
 
@@ -87,7 +92,7 @@ open BadmintonScore.xcodeproj    # 用 Xcode 打开
 
 ### 测试
 
-51 项单元测试，覆盖：
+56 项单元测试，覆盖：
 
 - 单局胜负判定（含 20 平、29 平、封顶）
 - 局点与赛点
@@ -95,6 +100,7 @@ open BadmintonScore.xcodeproj    # 用 Xcode 打开
 - 自定义规则的参数与边界（夹取、无封顶、局数换算）
 - 双打发球轮转
 - 比赛会话、撤销重做、切换赛制、改队名
+- 红黄牌计数、分类撤销、与比分撤销互不干扰
 - **对战记录**：自动记录、不重复记、没打完不记、再来一场能再记、自定义与双打也记、统计数字
 
 ```bash
@@ -110,7 +116,7 @@ xcrun simctl launch <UDID> com.alex.BadmintonScore -uiPreview match
 ```
 
 可用值：`home` · `match` · `gamePoint` · `deuce` · `gameEnd` · `win` · `deuceWin` ·
-`legacy15` · `custom` · `customMatch` · `doubles` · `records`
+`legacy15` · `custom` · `customMatch` · `doubles` · `cards` · `cardRed` · `cardYellow` · `records`
 
 几个附加开关：
 

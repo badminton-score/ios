@@ -23,6 +23,8 @@ struct MatchRecord: Codable, Identifiable, Equatable, Sendable {
     var winner: Side?
     /// 整场用了多久（秒）。
     var duration: TimeInterval
+    /// 本场双方的出牌记录。可选是为了兼容旧记录。
+    var cardEvents: [CardEvent]? = nil
 
     /// 红方赢了几局。
     var redGames: Int { games.filter { $0.winner == .red }.count }
@@ -31,6 +33,11 @@ struct MatchRecord: Codable, Identifiable, Equatable, Sendable {
 
     /// 某方赢的局数，记录列表里各方显示各自的。
     func games(of side: Side) -> Int { side == .red ? redGames : blueGames }
+
+    /// 某方、某种颜色的牌有几张。
+    func cardCount(of type: CardType, for side: Side) -> Int {
+        (cardEvents ?? []).filter { $0.type == type && $0.side == side }.count
+    }
 
     /// 大比分，例如 "2-1"。
     var gamesLine: String { "\(redGames)-\(blueGames)" }

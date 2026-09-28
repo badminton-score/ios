@@ -17,6 +17,24 @@ struct MatchView: View {
     @State private var bluePulse: Double = 0
     @State private var redShake: CGFloat = 0
     @State private var blueShake: CGFloat = 0
+    @State private var cardSignal: CardSignal? = {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-uiPreview"), index + 1 < arguments.count else {
+            return nil
+        }
+        switch arguments[index + 1] {
+        case "cardRed":
+            return CardSignal(side: .red, type: .red)
+        case "cardYellow":
+            return CardSignal(side: .blue, type: .yellow)
+        default:
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }()
 
     private let ticker = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
 
@@ -41,12 +59,15 @@ struct MatchView: View {
                     serveBox: state.serveBox,
                     isMatchPoint: store.isMatchPoint(.red),
                     isGamePoint: store.isGamePoint(.red),
+                    redCardCount: state.cardCount(of: .red, for: .red),
+                    yellowCardCount: state.cardCount(of: .yellow, for: .red),
                     isLocked: store.isLocked,
                     time: clock,
                     pulse: redPulse,
                     shake: redShake,
                     onScore: { addPoint(to: .red) },
                     onRemove: { removePoint(from: .red) },
+                    onCard: { showCard($0, for: .red) },
                     onRename: { store.rename(.red, to: $0) }
                 )
                 ScorePanel(
@@ -61,12 +82,15 @@ struct MatchView: View {
                     serveBox: state.serveBox,
                     isMatchPoint: store.isMatchPoint(.blue),
                     isGamePoint: store.isGamePoint(.blue),
+                    redCardCount: state.cardCount(of: .red, for: .blue),
+                    yellowCardCount: state.cardCount(of: .yellow, for: .blue),
                     isLocked: store.isLocked,
                     time: clock,
                     pulse: bluePulse,
                     shake: blueShake,
                     onScore: { addPoint(to: .blue) },
                     onRemove: { removePoint(from: .blue) },
+                    onCard: { showCard($0, for: .blue) },
                     onRename: { store.rename(.blue, to: $0) }
                 )
             }
@@ -75,6 +99,16 @@ struct MatchView: View {
             .padding(.bottom, 10)
 
             toastLayer
+
+            if let cardSignal {
+                CardSignalOverlay(
+                    sideName: state.name(of: cardSignal.side),
+                    type: cardSignal.type,
+                    onClose: closeCardSignal
+                )
+                .transition(.opacity)
+                .zIndex(20)
+            }
         }
         .onReceive(ticker) { date in
             clock = date.timeIntervalSinceReferenceDate
@@ -185,7 +219,11 @@ struct MatchView: View {
 
             Spacer(minLength: 4)
 
-            GlassButton(systemName: "arrow.uturn.backward", size: 38, isEnabled: store.canUndo) { undo() }
+            UndoMenu(
+                store: store,
+                onUndoScore: undo,
+                onUndoCard: undoCard
+            )
             GlassButton(systemName: "list.bullet", size: 38) { store.isShowingHistory = true }
             GlassButton(systemName: "slider.horizontal.3", size: 38) { store.isShowingSettings = true }
         }
@@ -224,6 +262,21 @@ struct MatchView: View {
         pulse(side)
     }
 
+    private func showCard(_ type: CardType, for side: Side) {
+        guard !store.isLocked else { return }
+        Haptics.critical()
+        store.addCard(type, to: side)
+        withAnimation(.easeOut(duration: 0.18)) {
+            cardSignal = CardSignal(side: side, type: type)
+        }
+    }
+
+    private func closeCardSignal() {
+        withAnimation(.easeIn(duration: 0.22)) {
+            cardSignal = nil
+        }
+    }
+
     private func undo() {
         guard store.canUndo, !store.isLocked else { return }
         Haptics.correction()
@@ -238,6 +291,13 @@ struct MatchView: View {
         Haptics.correction()
         store.removePoint(from: side)
         shake(side)
+    }
+
+    private func undoCard(_ type: CardType) {
+        guard store.canUndoCard(type) else { return }
+        Haptics.correction()
+        store.undoCard(type)
+        if let side = store.lastUndoneSide { shake(side) }
     }
 
     private func pulse(_ side: Side) {
@@ -275,12 +335,15 @@ struct ScorePanel: View {
     var serveBox: String
     var isMatchPoint: Bool
     var isGamePoint: Bool
+    var redCardCount: Int
+    var yellowCardCount: Int
     var isLocked: Bool
     var time: TimeInterval
     var pulse: Double
     var shake: CGFloat
     var onScore: () -> Void
     var onRemove: () -> Void
+    var onCard: (CardType) -> Void
     var onRename: (String) -> Void
 
     @State private var pressed = false
@@ -394,7 +457,7 @@ struct ScorePanel: View {
     }
 
     private var score: some View {
-        AnimatedNumber(value: points, size: 136, color: .white)
+        AnimatedNumber(value: points, size: 116, color: .white)
             .shadow(color: Theme.glow(side).opacity(0.55), radius: 24, y: 6)
             .overlay(alignment: .bottom) {
                 Capsule()
@@ -417,8 +480,27 @@ struct ScorePanel: View {
 
             Spacer()
 
-            MinusButton(side: side, isEnabled: points > 0 && !isLocked) {
-                onRemove()
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(spacing: 8) {
+                    CardButton(
+                        side: side,
+                        type: .red,
+                        count: redCardCount,
+                        isEnabled: !isLocked,
+                        action: { onCard(.red) }
+                    )
+                    CardButton(
+                        side: side,
+                        type: .yellow,
+                        count: yellowCardCount,
+                        isEnabled: !isLocked,
+                        action: { onCard(.yellow) }
+                    )
+                }
+
+                MinusButton(side: side, isEnabled: points > 0 && !isLocked) {
+                    onRemove()
+                }
             }
         }
     }
@@ -426,5 +508,127 @@ struct ScorePanel: View {
     private func commitName() {
         nameFocused = false
         onRename(editingName)
+    }
+}
+
+private struct CardSignal: Identifiable, Equatable {
+    let id = UUID()
+    var side: Side
+    var type: CardType
+}
+
+private struct UndoMenu: View {
+    @Bindable var store: MatchStore
+    var onUndoScore: () -> Void
+    var onUndoCard: (CardType) -> Void
+
+    private var isEnabled: Bool {
+        (store.canUndo || store.canUndoCard(.red) || store.canUndoCard(.yellow)) && !store.isLocked
+    }
+
+    var body: some View {
+        Menu {
+            Button(action: onUndoScore) {
+                Label("撤销分数", systemImage: "minus.circle")
+            }
+            .disabled(!store.canUndo || store.isLocked)
+
+            Button {
+                onUndoCard(.red)
+            } label: {
+                Label("撤销红牌", systemImage: "rectangle.portrait.fill")
+            }
+            .disabled(!store.canUndoCard(.red))
+
+            Button {
+                onUndoCard(.yellow)
+            } label: {
+                Label("撤销黄牌", systemImage: "rectangle.portrait.fill")
+            }
+            .disabled(!store.canUndoCard(.yellow))
+        } label: {
+            Image(systemName: "arrow.uturn.backward")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white.opacity(isEnabled ? 0.95 : 0.28))
+                .frame(width: 38, height: 38)
+                .background {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            Circle().strokeBorder(.white.opacity(isEnabled ? 0.18 : 0.07), lineWidth: 1)
+                        }
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel("撤销")
+    }
+}
+
+private struct CardSignalOverlay: View {
+    var sideName: String
+    var type: CardType
+    var onClose: () -> Void
+
+    private var foreground: Color {
+        type == .yellow ? Color.black.opacity(0.86) : .white
+    }
+
+    var body: some View {
+        ZStack {
+            Theme.card(type)
+                .ignoresSafeArea()
+
+            RadialGradient(
+                colors: [.white.opacity(type == .yellow ? 0.30 : 0.18), .clear],
+                center: .topLeading,
+                startRadius: 20,
+                endRadius: 520
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            VStack {
+                HStack {
+                    Spacer()
+
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .heavy))
+                            .foregroundStyle(foreground)
+                            .frame(width: 42, height: 42)
+                            .background {
+                                Circle()
+                                    .fill(foreground.opacity(0.12))
+                                    .overlay {
+                                        Circle().strokeBorder(foreground.opacity(0.24), lineWidth: 1)
+                                    }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("关闭")
+                }
+
+                Spacer()
+
+                VStack(spacing: 16) {
+                    Image(systemName: "rectangle.portrait.fill")
+                        .font(.system(size: 92, weight: .bold))
+                        .shadow(color: .black.opacity(0.16), radius: 20, y: 10)
+
+                    Text(sideName)
+                        .font(Theme.label(28, weight: .heavy))
+
+                    Text(type.title)
+                        .font(Theme.label(52, weight: .heavy))
+                }
+                .foregroundStyle(foreground)
+
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 28)
+        }
     }
 }

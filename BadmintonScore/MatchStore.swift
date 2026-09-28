@@ -94,6 +94,9 @@ final class MatchStore {
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
+    func canUndoCard(_ type: CardType) -> Bool {
+        !isLocked && state.cards.contains { $0.type == type }
+    }
 
     /// 当本局不会再有变化时（结束或整场结束）禁用加减分。
     var isLocked: Bool {
@@ -132,6 +135,30 @@ final class MatchStore {
         undo(preferredSide: side)
     }
 
+    /// 记一张红黄牌。牌不影响比分、发球或总局数。
+    func addCard(_ type: CardType, to side: Side) {
+        guard !isLocked else { return }
+        var next = state
+        next.addCard(type, to: side)
+        state = next
+        toast = nil
+        persist()
+    }
+
+    /// 撤销最近一张指定颜色的牌。
+    func undoCard(_ type: CardType) {
+        guard canUndoCard(type) else { return }
+        var next = state
+        guard let event = next.undoCard(type) else { return }
+        state = next
+        lastUndoneSide = event.side
+        toast = ToastMessage(
+            text: "已撤销 \(state.name(of: event.side))\(type.title)",
+            symbol: "arrow.uturn.backward"
+        )
+        persist()
+    }
+
     func undo(preferredSide: Side? = nil) {
         guard canUndo, presentation == nil else { return }
         let previous = undoStack.last
@@ -142,7 +169,9 @@ final class MatchStore {
             return nil
         }()
         pushRedo()
+        let cards = state.cardEvents
         state = undoStack.removeLast()
+        state.cardEvents = cards
         lastEvent = .undone
         lastEventToken = UUID()
         lastUndoneSide = side
@@ -157,7 +186,9 @@ final class MatchStore {
         // （Can't remove last element from an empty collection）。
         undoStack.append(state)
         if undoStack.count > 200 { undoStack.removeFirst(undoStack.count - 200) }
+        let cards = state.cardEvents
         state = redoStack.removeLast()
+        state.cardEvents = cards
         lastEvent = .point(side: state.server)
         lastEventToken = UUID()
         toast = ToastMessage(text: "已恢复 1 分", symbol: "arrow.uturn.forward")
@@ -176,7 +207,8 @@ final class MatchStore {
                 blueName: state.name(of: .blue),
                 games: state.gameScores,
                 winner: winner,
-                duration: Date().timeIntervalSince(startedAt)
+                duration: Date().timeIntervalSince(startedAt),
+                cardEvents: state.cardEvents
             )
         )
     }

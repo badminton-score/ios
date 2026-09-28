@@ -231,6 +231,31 @@ struct BadmintonRules: Codable, Equatable, Sendable {
 
 // MARK: - 比赛状态
 
+/// 比赛中的红黄牌。
+enum CardType: String, Codable, CaseIterable, Identifiable, Sendable {
+    case yellow
+    case red
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .yellow: "黄牌"
+        case .red: "红牌"
+        }
+    }
+}
+
+/// 一次出牌记录。牌不改变比分，只用于计数与撤销。
+struct CardEvent: Codable, Equatable, Identifiable, Sendable {
+    var id: UUID = UUID()
+    var side: Side
+    var type: CardType
+    var game: Int
+    var redPoints: Int
+    var bluePoints: Int
+}
+
 struct MatchState: Codable, Equatable, Sendable {
     var mode: ScoringMode
     var matchID: UUID
@@ -263,6 +288,8 @@ struct MatchState: Codable, Equatable, Sendable {
     /// 双打里各方当前该谁发球（0 或 1）。
     var redServeIndex: Int = 0
     var blueServeIndex: Int = 0
+    /// 本场比赛的出牌记录。可选是为了兼容没有这个字段的旧存档。
+    var cardEvents: [CardEvent]? = nil
 
     /// 仅 `.custom` 用：用户自己定的那套规则。
     ///
@@ -307,6 +334,37 @@ struct MatchState: Codable, Equatable, Sendable {
 
     func games(of side: Side) -> Int {
         side == .red ? redGames : blueGames
+    }
+
+    /// 某方、某种颜色的牌有几张。
+    func cardCount(of type: CardType, for side: Side) -> Int {
+        cards.filter { $0.type == type && $0.side == side }.count
+    }
+
+    /// 本场所有出牌记录，按发生顺序排列。
+    var cards: [CardEvent] { cardEvents ?? [] }
+
+    /// 记一张牌。
+    mutating func addCard(_ type: CardType, to side: Side) {
+        cardEvents = cards + [
+            CardEvent(
+                side: side,
+                type: type,
+                game: currentGame,
+                redPoints: redPoints,
+                bluePoints: bluePoints
+            )
+        ]
+    }
+
+    /// 撤销最近一张指定颜色的牌，返回被撤销的事件。
+    @discardableResult
+    mutating func undoCard(_ type: CardType) -> CardEvent? {
+        var events = cards
+        guard let index = events.lastIndex(where: { $0.type == type }) else { return nil }
+        let event = events.remove(at: index)
+        cardEvents = events
+        return event
     }
 
     /// 当前局是否已经结束。

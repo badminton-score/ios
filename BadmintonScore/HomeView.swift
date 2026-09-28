@@ -132,6 +132,12 @@ struct DebugPreview {
                 let games = s.2.enumerated().map { GameScore(game: $0.offset + 1, red: $0.element.0, blue: $0.element.1) }
                 let redWins = games.filter { $0.winner == .red }.count
                 let blueWins = games.count - redWins
+                let cardEvents: [CardEvent]? = i == 0
+                    ? [
+                        CardEvent(side: .red, type: .red, game: 3, redPoints: 21, bluePoints: 15),
+                        CardEvent(side: .blue, type: .yellow, game: 2, redPoints: 18, bluePoints: 21),
+                    ]
+                    : nil
                 history.add(
                     MatchRecord(
                         date: now.addingTimeInterval(-Double(i) * 5400 - 600),
@@ -139,7 +145,8 @@ struct DebugPreview {
                         redName: s.0, blueName: s.1,
                         games: games,
                         winner: redWins > blueWins ? .red : .blue,
-                        duration: s.5
+                        duration: s.5,
+                        cardEvents: cardEvents
                     )
                 )
             }
@@ -170,6 +177,27 @@ struct DebugPreview {
             state.setPlayers(["李宗伟", "黄妙珠"], for: .blue)
             state = play(state, red: 17, blue: 15, server: .red)
             state.redServeIndex = 1          // 轮到谢杏芳发球
+            return DebugPreview(store: MatchStore(state: state), showsMatch: true)
+
+        case "cards":
+            var state = MatchState(mode: .bwf21, redName: "林丹", blueName: "李宗伟")
+            state = play(state, red: 18, blue: 16, server: .red)
+            state.addCard(.red, to: .red)
+            state.addCard(.yellow, to: .red)
+            state.addCard(.red, to: .blue)
+            state.addCard(.yellow, to: .blue)
+            return DebugPreview(store: MatchStore(state: state), showsMatch: true)
+
+        case "cardRed":
+            var state = MatchState(mode: .bwf21, redName: "林丹", blueName: "李宗伟")
+            state = play(state, red: 18, blue: 16, server: .red)
+            state.addCard(.red, to: .red)
+            return DebugPreview(store: MatchStore(state: state), showsMatch: true)
+
+        case "cardYellow":
+            var state = MatchState(mode: .bwf21, redName: "林丹", blueName: "李宗伟")
+            state = play(state, red: 18, blue: 16, server: .red)
+            state.addCard(.yellow, to: .blue)
             return DebugPreview(store: MatchStore(state: state), showsMatch: true)
 
         case "legacy15":

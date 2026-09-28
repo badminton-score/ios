@@ -154,6 +154,73 @@ struct PointBadge: View {
 
 // MARK: - 减分按钮
 
+/// 计分面板里的出牌按钮，按钮上直接显示这一方的累计张数。
+struct CardButton: View {
+    var side: Side
+    var type: CardType
+    var count: Int
+    var isEnabled: Bool
+    var action: () -> Void
+
+    private var color: Color { Theme.card(type) }
+
+    var body: some View {
+        Button {
+            guard isEnabled else { return }
+            action()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "rectangle.portrait.fill")
+                    .font(.system(size: 12, weight: .bold))
+                Text("\(count)")
+                    .font(Theme.scoreFont(12))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(color.opacity(isEnabled ? 1 : 0.25))
+            .frame(width: 48, height: 34)
+            .background {
+                Capsule(style: .continuous)
+                    .fill(color.opacity(isEnabled ? 0.14 : 0.05))
+                    .overlay {
+                        Capsule(style: .continuous)
+                            .strokeBorder(color.opacity(isEnabled ? 0.48 : 0.1), lineWidth: 1)
+                    }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel("\(side.defaultName)\(type.title)，当前 \(count) 张")
+    }
+}
+
+/// 紧凑的红黄牌次数标签，记录页与局中记录共用。
+struct CardCountTag: View {
+    var type: CardType
+    var count: Int
+
+    private var color: Color { Theme.card(type) }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "rectangle.portrait.fill")
+                .font(.system(size: 9, weight: .bold))
+            Text("\(type.title) \(count)")
+                .font(Theme.label(10, weight: .bold))
+                .monospacedDigit()
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background {
+            Capsule(style: .continuous)
+                .fill(color.opacity(0.12))
+                .overlay {
+                    Capsule(style: .continuous).strokeBorder(color.opacity(0.25), lineWidth: 0.8)
+                }
+        }
+    }
+}
+
 struct MinusButton: View {
     var side: Side
     var isEnabled: Bool

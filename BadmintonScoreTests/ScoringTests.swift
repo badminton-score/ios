@@ -291,6 +291,52 @@ struct MatchStoreTests {
         #expect(store.state.log.isEmpty)
     }
 
+    @Test("红黄牌只计数，不改变比分和发球权")
+    func cardsDoNotChangeScoreOrServe() {
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.addPoint(to: .red)
+
+        store.addCard(.red, to: .red)
+        store.addCard(.yellow, to: .blue)
+
+        #expect(store.state.redPoints == 1)
+        #expect(store.state.bluePoints == 0)
+        #expect(store.state.server == .red)
+        #expect(store.state.cardCount(of: .red, for: .red) == 1)
+        #expect(store.state.cardCount(of: .yellow, for: .blue) == 1)
+    }
+
+    @Test("撤销牌时只撤销最近一张同色牌")
+    func undoCardByType() {
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.addCard(.red, to: .red)
+        store.addCard(.red, to: .blue)
+        store.addCard(.yellow, to: .red)
+
+        store.undoCard(.red)
+
+        #expect(store.state.cardCount(of: .red, for: .red) == 1)
+        #expect(store.state.cardCount(of: .red, for: .blue) == 0)
+        #expect(store.state.cardCount(of: .yellow, for: .red) == 1)
+        #expect(store.canUndoCard(.red))
+        #expect(store.canUndoCard(.yellow))
+    }
+
+    @Test("撤销分数不影响已经记下的牌")
+    func scoreUndoKeepsCards() {
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.addPoint(to: .red)
+        store.addCard(.yellow, to: .red)
+
+        store.undo()
+        #expect(store.state.redPoints == 0)
+        #expect(store.state.cardCount(of: .yellow, for: .red) == 1)
+
+        store.redo()
+        #expect(store.state.redPoints == 1)
+        #expect(store.state.cardCount(of: .yellow, for: .red) == 1)
+    }
+
     @Test("本局结束后加减分按钮锁定")
     func lockedAfterGame() {
         let store = MatchStore(state: MatchState(mode: .bwf21))
@@ -789,6 +835,30 @@ struct MatchHistoryTests {
         #expect(r.games(of: .blue) == 1)
         #expect(r.redGames == 2)
         #expect(r.blueGames == 1)
+    }
+
+    @Test("历史记录保存双方红黄牌次数")
+    func recordCardCounts() {
+        let history = freshHistory()
+        defer { history.clear() }
+
+        let store = MatchStore(state: MatchState(mode: .bwf21))
+        store.history = history
+
+        store.addCard(.red, to: .red)
+        store.addCard(.yellow, to: .red)
+        store.addCard(.red, to: .blue)
+
+        for _ in 0..<21 { store.addPoint(to: .red) }
+        store.startNextGame()
+        for _ in 0..<21 { store.addPoint(to: .red) }
+
+        #expect(history.records.count == 1)
+        let record = history.records[0]
+        #expect(record.cardCount(of: .red, for: .red) == 1)
+        #expect(record.cardCount(of: .yellow, for: .red) == 1)
+        #expect(record.cardCount(of: .red, for: .blue) == 1)
+        #expect(record.cardCount(of: .yellow, for: .blue) == 0)
     }
 
     @Test("统计数字对得上")

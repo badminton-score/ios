@@ -265,14 +265,18 @@ private struct RecordRow: View {
             HStack(alignment: .center, spacing: 10) {
                 // 各方显示**自己**赢的局数（之前两边都用了 gamesLine，都显示「2-1」）
                 side(record.redName, score: "\(record.games(of: .red))",
-                     isWinner: record.winner == .red, tint: Theme.Red.base)
+                     isWinner: record.winner == .red, tint: Theme.Red.base,
+                     redCards: record.cardCount(of: .red, for: .red),
+                     yellowCards: record.cardCount(of: .yellow, for: .red))
 
                 Text("vs")
                     .font(Theme.label(11, weight: .bold))
                     .foregroundStyle(.white.opacity(0.3))
 
                 side(record.blueName, score: "\(record.games(of: .blue))",
-                     isWinner: record.winner == .blue, tint: Theme.Blue.base)
+                     isWinner: record.winner == .blue, tint: Theme.Blue.base,
+                     redCards: record.cardCount(of: .red, for: .blue),
+                     yellowCards: record.cardCount(of: .yellow, for: .blue))
             }
 
             if !record.scoreLine.isEmpty {
@@ -299,21 +303,35 @@ private struct RecordRow: View {
         }
     }
 
-    private func side(_ name: String, score: String, isWinner: Bool, tint: Color) -> some View {
-        HStack(spacing: 7) {
-            if isWinner {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(tint)
+    private func side(
+        _ name: String,
+        score: String,
+        isWinner: Bool,
+        tint: Color,
+        redCards: Int,
+        yellowCards: Int
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 7) {
+                if isWinner {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(tint)
+                }
+                Text(name)
+                    .font(Theme.label(14, weight: isWinner ? .bold : .medium))
+                    .foregroundStyle(isWinner ? .white : .white.opacity(0.55))
+                    .lineLimit(1)
+                Text(score)
+                    .font(Theme.scoreFont(14))
+                    .foregroundStyle(isWinner ? tint : Color.white.opacity(0.4))
+                    .monospacedDigit()
             }
-            Text(name)
-                .font(Theme.label(14, weight: isWinner ? .bold : .medium))
-                .foregroundStyle(isWinner ? .white : .white.opacity(0.55))
-                .lineLimit(1)
-            Text(score)
-                .font(Theme.scoreFont(14))
-                .foregroundStyle(isWinner ? tint : Color.white.opacity(0.4))
-                .monospacedDigit()
+
+            HStack(spacing: 5) {
+                CardCountTag(type: .red, count: redCards)
+                CardCountTag(type: .yellow, count: yellowCards)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -220,6 +220,11 @@ struct MatchHistorySheet: View {
             Text("局 \(state.games(of: side))")
                 .font(Theme.label(12, weight: .semibold))
                 .foregroundStyle(Theme.accent(side))
+
+            HStack(spacing: 5) {
+                CardCountTag(type: .red, count: state.cardCount(of: .red, for: side))
+                CardCountTag(type: .yellow, count: state.cardCount(of: .yellow, for: side))
+            }
         }
         .frame(maxWidth: .infinity)
     }
